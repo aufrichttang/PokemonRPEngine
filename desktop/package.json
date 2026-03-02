@@ -1,0 +1,13 @@
+{
+  "name": "pokemon-rp-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for Pokemon RP console",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^35.0.2"
+  }
+}

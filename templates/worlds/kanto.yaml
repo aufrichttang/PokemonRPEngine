@@ -1,0 +1,9 @@
+﻿name: kanto-default
+region: kanto
+summary: Standard Kanto progression with gym/champion structure.
+canon_gen: 9
+canon_game: sv
+rules:
+  - Canon data has highest factual authority.
+  - Timeline confirmed facts are immutable.
+  - Conflict facts must create open threads.

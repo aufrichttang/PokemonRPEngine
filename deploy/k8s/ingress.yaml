@@ -1,0 +1,16 @@
+﻿apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pokemon-rp-api
+spec:
+  rules:
+    - host: pokemon-rp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pokemon-rp-api
+                port:
+                  number: 80

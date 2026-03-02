@@ -1,0 +1,62 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pokemon-rp-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pokemon-rp-api
+  template:
+    metadata:
+      labels:
+        app: pokemon-rp-api
+    spec:
+      containers:
+        - name: api
+          image: pokemon-rp-engine:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: database_url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: redis_url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: jwt_secret
+            - name: XF_APPID
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: xf_appid
+            - name: XF_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: xf_api_key
+            - name: XF_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pokemon-rp-secrets
+                  key: xf_api_secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pokemon-rp-api
+spec:
+  selector:
+    app: pokemon-rp-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
