@@ -21,19 +21,14 @@ def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@router.get("/v1/admin/metrics")
-def admin_metrics() -> Response:
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-
-@router.get("/v1/admin/metrics/summary")
+@router.get("/admin/metrics/summary")
 def admin_metrics_summary(
     _user: Annotated[User, Depends(require_roles("admin", "operator"))],
 ) -> dict[str, float]:
     return snapshot_summary()
 
 
-@router.get("/v1/admin/logs/recent")
+@router.get("/admin/logs/recent")
 def admin_recent_logs(
     _user: Annotated[User, Depends(require_roles("admin", "operator"))],
     lines: int = Query(default=200, ge=10, le=5000),

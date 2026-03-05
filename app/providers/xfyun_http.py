@@ -1,7 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import json
+import random
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -17,6 +18,15 @@ class XfyunHttpProvider(LLMProvider):
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        timeout = httpx.Timeout(
+            timeout=self.settings.llm_timeout_seconds,
+            connect=self.settings.llm_connect_timeout_seconds,
+            read=self.settings.llm_read_timeout_seconds,
+            write=self.settings.llm_timeout_seconds,
+            pool=self.settings.llm_timeout_seconds,
+        )
+        limits = httpx.Limits(max_connections=64, max_keepalive_connections=16, keepalive_expiry=45)
+        self._client = httpx.AsyncClient(timeout=timeout, limits=limits, http2=False)
 
     def _bearer_token(self) -> str:
         """Build bearer token compatible with XFYun v1/v2 gateway variants."""
@@ -67,27 +77,26 @@ class XfyunHttpProvider(LLMProvider):
         if stream:
             return self._streaming(endpoint=endpoint, payload=payload, start=start)
 
-        retries = self.settings.llm_max_retries
-        async with httpx.AsyncClient(timeout=self.settings.llm_timeout_seconds) as client:
-            last_exc: Exception | None = None
-            for attempt in range(retries + 1):
-                try:
-                    response = await client.post(endpoint, json=payload, headers=self._headers())
-                    response.raise_for_status()
-                    data = response.json()
-                    text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    usage = data.get("usage")
-                    self.last_metrics = ProviderMetrics(
-                        provider=self.name,
-                        latency_ms=int((time.perf_counter() - start) * 1000),
-                        token_usage=usage,
-                    )
-                    return text
-                except Exception as exc:
-                    last_exc = exc
-                    if attempt >= retries:
-                        break
-                    await asyncio.sleep(0.5 * (2**attempt))
+        retries = max(0, min(self.settings.llm_max_retries, 1))
+        last_exc: Exception | None = None
+        for attempt in range(retries + 1):
+            try:
+                response = await self._client.post(endpoint, json=payload, headers=self._headers())
+                response.raise_for_status()
+                data = response.json()
+                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                usage = data.get("usage")
+                self.last_metrics = ProviderMetrics(
+                    provider=self.name,
+                    latency_ms=int((time.perf_counter() - start) * 1000),
+                    token_usage=usage,
+                )
+                return text
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= retries:
+                    break
+                await asyncio.sleep(0.22 + random.uniform(0.0, 0.28))
 
         assert last_exc is not None
         raise last_exc
@@ -100,51 +109,50 @@ class XfyunHttpProvider(LLMProvider):
         start: float,
     ) -> AsyncIterator[str]:
         async def iterator() -> AsyncIterator[str]:
-            retries = self.settings.llm_max_retries
+            retries = max(0, min(self.settings.llm_max_retries, 1))
             last_exc: Exception | None = None
             usage: dict[str, Any] | None = None
 
             for attempt in range(retries + 1):
                 try:
-                    async with httpx.AsyncClient(timeout=self.settings.llm_timeout_seconds) as client:
-                        async with client.stream(
-                            "POST", endpoint, json=payload, headers=self._headers()
-                        ) as response:
-                            response.raise_for_status()
-                            content_type = response.headers.get("content-type", "")
-                            if "text/event-stream" not in content_type:
-                                body = await response.aread()
-                                text = body.decode("utf-8", errors="ignore")
-                                for i in range(0, len(text), 80):
-                                    await asyncio.sleep(0)
-                                    yield text[i : i + 80]
-                                break
-
-                            async for line in response.aiter_lines():
-                                if not line.startswith("data:"):
-                                    continue
-                                data = line[5:].strip()
-                                if data == "[DONE]":
-                                    break
-                                try:
-                                    payload_obj = json.loads(data)
-                                except json.JSONDecodeError:
-                                    continue
-                                delta = (
-                                    payload_obj.get("choices", [{}])[0]
-                                    .get("delta", {})
-                                    .get("content", "")
-                                )
-                                if delta:
-                                    yield delta
-                                if payload_obj.get("usage"):
-                                    usage = payload_obj.get("usage")
+                    async with self._client.stream(
+                        "POST", endpoint, json=payload, headers=self._headers()
+                    ) as response:
+                        response.raise_for_status()
+                        content_type = response.headers.get("content-type", "")
+                        if "text/event-stream" not in content_type:
+                            body = await response.aread()
+                            text = body.decode("utf-8", errors="ignore")
+                            for i in range(0, len(text), 80):
+                                await asyncio.sleep(0)
+                                yield text[i : i + 80]
                             break
+
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if data == "[DONE]":
+                                break
+                            try:
+                                payload_obj = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+                            delta = (
+                                payload_obj.get("choices", [{}])[0]
+                                .get("delta", {})
+                                .get("content", "")
+                            )
+                            if delta:
+                                yield delta
+                            if payload_obj.get("usage"):
+                                usage = payload_obj.get("usage")
+                        break
                 except Exception as exc:
                     last_exc = exc
                     if attempt >= retries:
                         raise
-                    await asyncio.sleep(0.5 * (2**attempt))
+                    await asyncio.sleep(0.22 + random.uniform(0.0, 0.28))
 
             self.last_metrics = ProviderMetrics(
                 provider=self.name,

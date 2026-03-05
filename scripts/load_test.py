@@ -1,4 +1,4 @@
-﻿"""Simple load test script using asyncio + httpx.
+"""Simple load test script using asyncio + httpx.
 Usage:
 python scripts/load_test.py --base-url http://localhost:8000 --token <jwt> --session-id <id>
 """

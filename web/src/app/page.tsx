@@ -1,20 +1,18 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Spin } from "antd";
-import { getToken } from "@/lib/auth/token";
 
 export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(getToken() ? "/sessions" : "/login");
+    router.replace("/adventure");
   }, [router]);
 
   return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
-      <Spin size="large" />
+    <div className="grid min-h-screen place-items-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#4da3ff]/30 border-t-[#4da3ff]" />
     </div>
   );
 }

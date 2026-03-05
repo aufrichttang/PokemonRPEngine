@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
 $env:DATABASE_URL = 'sqlite:///./app.db'
 $env:REDIS_URL = 'redis://localhost:6379/0'

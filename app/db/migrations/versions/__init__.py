@@ -1,1 +1,1 @@
-﻿"""Alembic migration package."""
+"""Alembic migration package."""

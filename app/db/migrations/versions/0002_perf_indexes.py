@@ -1,4 +1,4 @@
-﻿"""Add performance indexes for login/session workloads.
+"""Add performance indexes for login/session workloads.
 
 Revision ID: 0002_perf_indexes
 Revises: 0001_initial

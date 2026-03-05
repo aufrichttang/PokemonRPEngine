@@ -1,4 +1,4 @@
-﻿"""Initial schema for Pokemon RP engine.
+"""Initial schema for Pokemon RP engine.
 
 Revision ID: 0001_initial
 Revises:

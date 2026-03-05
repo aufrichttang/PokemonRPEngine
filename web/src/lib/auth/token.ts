@@ -40,7 +40,7 @@ export function getRole(): Role | null {
   if (value === "admin" || value === "operator" || value === "viewer" || value === "user") {
     return value;
   }
-  return null;
+  return "admin";
 }
 
 export function getRoleFromToken(token: string): Role | null {

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from app.core.config import Settings
 from app.memory.schemas import RecallItem, RetrievalResult

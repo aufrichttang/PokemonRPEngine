@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
 from app.providers.xfyun_ws import build_ws_authorized_url

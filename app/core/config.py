@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,6 +32,29 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="xfyun_http", alias="LLM_PROVIDER")
     llm_timeout_seconds: int = Field(default=30, alias="LLM_TIMEOUT_SECONDS")
     llm_max_retries: int = Field(default=2, alias="LLM_MAX_RETRIES")
+    llm_connect_timeout_seconds: int = Field(default=5, alias="LLM_CONNECT_TIMEOUT_SECONDS")
+    llm_read_timeout_seconds: int = Field(default=60, alias="LLM_READ_TIMEOUT_SECONDS")
+    llm_planner_timeout_seconds: int = Field(default=12, alias="LLM_PLANNER_TIMEOUT_SECONDS")
+    llm_planner_max_tokens: int = Field(default=180, alias="LLM_PLANNER_MAX_TOKENS")
+    llm_narrative_max_tokens: int = Field(default=1600, alias="LLM_NARRATIVE_MAX_TOKENS")
+    llm_narrative_max_tokens_fast: int = Field(
+        default=700, alias="LLM_NARRATIVE_MAX_TOKENS_FAST"
+    )
+    llm_narrative_max_tokens_balanced: int = Field(
+        default=900, alias="LLM_NARRATIVE_MAX_TOKENS_BALANCED"
+    )
+    llm_narrative_max_tokens_epic: int = Field(
+        default=1200, alias="LLM_NARRATIVE_MAX_TOKENS_EPIC"
+    )
+    llm_narrative_climax_max_tokens: int = Field(
+        default=1400, alias="LLM_NARRATIVE_CLIMAX_MAX_TOKENS"
+    )
+    canon_repair_mode: str = Field(default="smart", alias="CANON_REPAIR_MODE")
+    canon_repair_issue_limit: int = Field(default=2, alias="CANON_REPAIR_ISSUE_LIMIT")
+    story_enhancement_enabled: bool = Field(default=True, alias="STORY_ENHANCEMENT_ENABLED")
+    story_enhancement_timeout_seconds: int = Field(
+        default=8, alias="STORY_ENHANCEMENT_TIMEOUT_SECONDS"
+    )
 
     xf_auth_mode: str = Field(default="bearer", alias="XF_AUTH_MODE")
     xf_appid: str = Field(default="", alias="XF_APPID")
@@ -63,6 +86,9 @@ class Settings(BaseSettings):
     bootstrap_default_admin: bool = Field(default=True, alias="BOOTSTRAP_DEFAULT_ADMIN")
     default_admin_username: str = Field(default="admin", alias="DEFAULT_ADMIN_USERNAME")
     default_admin_password: str = Field(default="admin", alias="DEFAULT_ADMIN_PASSWORD")
+    auth_bypass_local: bool = Field(default=True, alias="AUTH_BYPASS_LOCAL")
+    auth_bypass_username: str = Field(default="local_player", alias="AUTH_BYPASS_USERNAME")
+    auth_bypass_role: str = Field(default="admin", alias="AUTH_BYPASS_ROLE")
 
 
 @lru_cache(maxsize=1)

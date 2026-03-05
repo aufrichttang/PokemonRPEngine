@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import re
@@ -13,6 +13,9 @@ from app.db.models import CanonAbility, CanonMove, CanonPokemon, CanonTypeChart
 from app.db.models import Session as StorySession
 
 JSON_BLOCK_PATTERN = re.compile(r"<!--JSON-->(.*?)<!--/JSON-->", re.DOTALL)
+JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+JSON_TAIL_PATTERN = re.compile(r"(\{[\s\S]*?\"facts_used\"[\s\S]*\})\s*$", re.IGNORECASE)
+JSON_FENCE_UNCLOSED_PATTERN = re.compile(r"```(?:json)?[\s\S]*$", re.IGNORECASE)
 
 
 @dataclass
@@ -28,18 +31,71 @@ class FactCheckResult:
     issues: list[FactIssue]
 
 
-def extract_structured_json(text: str) -> dict[str, Any]:
-    match = JSON_BLOCK_PATTERN.search(text)
-    if not match:
-        return {"facts_used": [], "state_update": {}, "open_threads_update": []}
-    payload = match.group(1).strip()
+def _default_payload() -> dict[str, Any]:
+    return {
+        "facts_used": [],
+        "state_update": {},
+        "open_threads_update": [],
+        "action_options": [],
+    }
+
+
+def _parse_json_object(payload: str) -> dict[str, Any] | None:
     try:
-        obj = json.loads(payload)
-        if isinstance(obj, dict):
-            return obj
+        obj = json.loads(payload.strip())
     except json.JSONDecodeError:
-        pass
-    return {"facts_used": [], "state_update": {}, "open_threads_update": []}
+        return None
+    if isinstance(obj, dict):
+        return obj
+    return None
+
+
+def try_extract_structured_json(text: str) -> dict[str, Any] | None:
+    for pattern in (JSON_BLOCK_PATTERN, JSON_FENCE_PATTERN):
+        matches = pattern.findall(text)
+        for payload in reversed(matches):
+            parsed = _parse_json_object(payload)
+            if parsed is not None:
+                return parsed
+
+    unclosed = JSON_FENCE_UNCLOSED_PATTERN.search(text)
+    if unclosed:
+        payload = unclosed.group(0)
+        start = payload.find("{")
+        end = payload.rfind("}")
+        if start >= 0 and end > start:
+            parsed = _parse_json_object(payload[start : end + 1])
+            if parsed is not None:
+                return parsed
+
+    tail = JSON_TAIL_PATTERN.search(text)
+    if tail:
+        parsed = _parse_json_object(tail.group(1))
+        if parsed is not None:
+            return parsed
+
+    return None
+
+
+def extract_structured_json(text: str, *, strict: bool = False) -> dict[str, Any]:
+    parsed = try_extract_structured_json(text)
+    if parsed is not None:
+        return parsed
+    if strict:
+        return {}
+    return _default_payload()
+
+
+def strip_structured_json(text: str) -> str:
+    cleaned = JSON_BLOCK_PATTERN.sub("", text)
+    cleaned = JSON_FENCE_PATTERN.sub("", cleaned)
+    cleaned = JSON_FENCE_UNCLOSED_PATTERN.sub("", cleaned)
+
+    tail = JSON_TAIL_PATTERN.search(cleaned)
+    if tail and _parse_json_object(tail.group(1)) is not None:
+        cleaned = cleaned[: tail.start()]
+
+    return cleaned.strip()
 
 
 def _exists_by_slug_or_alias(row_slug: str, aliases: list[str], value: str) -> bool:
@@ -61,6 +117,8 @@ def check_facts(
     issues: list[FactIssue] = []
 
     for fact in facts_used:
+        if not isinstance(fact, dict):
+            continue
         kind = fact.get("kind")
         slug = str(fact.get("slug") or fact.get("id") or "").strip()
         if not slug:

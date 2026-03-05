@@ -1,20 +1,184 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  color-scheme: light;
+  --radius: 1rem;
+  --background: 224 46% 8%;
+  --foreground: 214 100% 95%;
+  --card: 222 49% 13%;
+  --card-foreground: 214 100% 95%;
+  --primary: 210 100% 65%;
+  --primary-foreground: 218 100% 98%;
+  --secondary: 224 36% 20%;
+  --secondary-foreground: 214 100% 92%;
+  --muted: 223 35% 18%;
+  --muted-foreground: 219 30% 74%;
+  --accent: 256 77% 66%;
+  --accent-foreground: 220 100% 97%;
+  --destructive: 344 95% 66%;
+  --destructive-foreground: 216 100% 98%;
+  --border: 220 40% 30%;
+  --input: 223 45% 21%;
+  --ring: 210 100% 65%;
 }
 
 * {
-  box-sizing: border-box;
+  @apply border-border;
 }
 
 html,
 body {
   margin: 0;
-  padding: 0;
   min-height: 100%;
-  background: #f4f7fb;
+  color: hsl(var(--foreground));
+  background:
+    radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.2), transparent 30%),
+    radial-gradient(circle at 75% 20%, rgba(124, 92, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 30% 80%, rgba(55, 214, 200, 0.14), transparent 35%),
+    linear-gradient(180deg, #0a1125 0%, #070d1d 100%);
+  font-family: var(--font-body), "Noto Sans SC", sans-serif;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(12, 20, 45, 0.75);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(96, 138, 211, 0.6);
+  border-radius: 999px;
+  border: 2px solid rgba(12, 20, 45, 0.75);
+}
+
+.title-display {
+  font-family: var(--font-display), "ZCOOL QingKe HuangYou", sans-serif;
+}
+
+.game-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 300px 1fr 340px;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+@media (max-width: 1439px) {
+  .game-shell {
+    grid-template-columns: 280px 1fr;
+  }
+
+  .game-right {
+    grid-column: 1 / span 2;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .game-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .game-right {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+}
+
+.story-scroll {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  padding-right: 0.4rem;
+  scroll-behavior: smooth;
+}
+
+.input-panel {
+  backdrop-filter: blur(10px);
+}
+
+.message-enter {
+  animation: fadeInUp 220ms ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.keyword-epic {
+  color: #ffd39f;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 179, 71, 0.8);
+}
+
+.keyword-romance {
+  color: #ffc0d8;
+  font-style: italic;
+}
+
+.keyword-mainline {
+  color: #9ad1ff;
+  font-weight: 700;
+}
+
+.prose-rp {
+  max-width: none;
+  color: #e8f2ff;
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.prose-rp p {
+  margin: 0 0 0.55rem;
+}
+
+.prose-rp strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.prose-rp em {
+  color: #d2e5ff;
+  font-style: italic;
+}
+
+.prose-rp u {
+  text-decoration-color: rgba(124, 92, 255, 0.9);
+  text-decoration-thickness: 2px;
+}
+
+.prose-rp ul,
+.prose-rp ol {
+  margin: 0.35rem 0 0.75rem 1rem;
+}
+
+.prose-rp li {
+  margin: 0.2rem 0;
+}
+
+.panel-glow {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 40px rgba(0, 0, 0, 0.35);
+}
+
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
 }

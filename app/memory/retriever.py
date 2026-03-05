@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 import uuid
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.db.models import MemoryChunk, OpenThread, TimelineEvent, Turn
+from app.kernels.event_classifier import infer_legacy_tags
 from app.memory.schemas import QueryPlan, RecallItem, RetrievalDebug, RetrievalResult
 from app.utils.text import clamp_text
 
@@ -35,6 +36,15 @@ def retrieve_memory(
     settings: Settings,
 ) -> RetrievalResult:
     keywords = [q.q for q in query_plan.queries]
+    keyword_text = " ".join(keywords)
+    desired_time_class: str | None = None
+    if any(k in keyword_text for k in ("回顾", "复盘", "总结", "recap")):
+        desired_time_class = "fixed"
+    elif any(k in keyword_text for k in ("调查", "冲突", "矛盾", "investigation")):
+        desired_time_class = "fragile"
+    elif any(k in keyword_text for k in ("梦", "幻视", "回响", "echo")):
+        desired_time_class = "echo"
+    desired_legacy = set(infer_legacy_tags(text=keyword_text))
 
     timeline_stmt: Select[tuple[TimelineEvent]] = (
         select(TimelineEvent)
@@ -57,6 +67,16 @@ def retrieve_memory(
             for k in keywords
         )
     ]
+    if desired_time_class:
+        filtered = [
+            row for row in filtered if getattr(row.time_class, "value", str(row.time_class)) == desired_time_class
+        ] or filtered
+    if desired_legacy:
+        filtered = [
+            row
+            for row in filtered
+            if desired_legacy.intersection(set(row.canon_legacy_tags or []))
+        ] or filtered
     if len(filtered) < settings.max_canon_facts:
         filtered.extend([x for x in timeline_rows if x not in filtered])
 
@@ -82,6 +102,10 @@ def retrieve_memory(
 
     scored: list[tuple[MemoryChunk, float, int]] = []
     for chunk in chunk_rows:
+        if desired_time_class and getattr(chunk.time_class, "value", str(chunk.time_class)) != desired_time_class:
+            continue
+        if desired_legacy and not desired_legacy.intersection(set(chunk.canon_legacy_tags or [])):
+            continue
         score = 0.0
         for q_embed in query_embeddings:
             score = max(score, _cosine(q_embed, list(chunk.embedding)))

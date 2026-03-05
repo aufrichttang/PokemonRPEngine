@@ -1,0 +1,33 @@
+{
+  "defaults": {
+    "league_central_stability": 70,
+    "league_public_faction_power": 50,
+    "league_regional_defiance": 30,
+    "white_ring_banist": 35,
+    "white_ring_transitionist": 45,
+    "white_ring_accelerationist": 20,
+    "consortium_governance": 45,
+    "consortium_expansion": 35,
+    "consortium_substitution": 20,
+    "grassroots_mutual_aid": 45,
+    "grassroots_militia": 20,
+    "grassroots_radicalisation": 10,
+    "witnesses_intervention": 30,
+    "witnesses_preservation": 50,
+    "witnesses_resignation": 20
+  },
+  "keyword_delta": {
+    "联盟": {"league_central_stability": 2, "league_public_faction_power": 1},
+    "道馆": {"league_public_faction_power": 2, "league_regional_defiance": -1},
+    "白环": {"white_ring_transitionist": 3},
+    "禁令": {"white_ring_banist": 3},
+    "加速": {"white_ring_accelerationist": 3},
+    "财团": {"consortium_governance": 2, "consortium_expansion": 2},
+    "草根": {"grassroots_mutual_aid": 2},
+    "民兵": {"grassroots_militia": 3},
+    "暴动": {"grassroots_radicalisation": 4},
+    "见证者": {"witnesses_intervention": 2, "witnesses_preservation": 1},
+    "神兽": {"witnesses_intervention": 3}
+  }
+}
+

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import uuid
 from functools import lru_cache
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.rate_limit import RateLimiter
 from app.core.security import SecurityService
-from app.db.models import User
+from app.db.models import User, UserRole
 from app.db.session import get_db
 from app.memory.schemas import EmbeddingProvider, get_embedding_provider
 from app.providers.base import LLMProvider
@@ -23,6 +23,8 @@ from app.services.admin_service import AdminService
 from app.services.auth_service import AuthService
 from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
+from app.services.v2.game_facade import GameFacadeService
+from app.services.v2.state_reducer import StateReducer
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -59,8 +61,10 @@ def get_auth_service(
     return AuthService(security)
 
 
+@lru_cache(maxsize=1)
 def get_session_service() -> SessionService:
-    return SessionService()
+    settings = get_settings()
+    return SessionService(settings=settings, provider=get_llm_provider())
 
 
 def get_chat_service() -> ChatService:
@@ -72,16 +76,51 @@ def get_chat_service() -> ChatService:
     )
 
 
+@lru_cache(maxsize=1)
+def get_game_facade_service() -> GameFacadeService:
+    return GameFacadeService(
+        session_service=get_session_service(),
+        chat_service=get_chat_service(),
+        state_reducer=StateReducer(),
+    )
+
+
 def get_admin_service() -> AdminService:
     return AdminService()
 
 
 def get_current_user(
+    request: Request,
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
     db: Annotated[Session, Depends(get_db)],
     security: Annotated[SecurityService, Depends(get_security_service)],
 ) -> User:
+    settings = get_settings()
+    client_host = request.client.host if request.client else ""
+    local_request = client_host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
     if not creds:
+        if settings.auth_bypass_local and local_request:
+            fallback_name = settings.auth_bypass_username or settings.default_admin_username
+            user = db.execute(select(User).where(User.email == fallback_name)).scalar_one_or_none()
+            if user is None:
+                role_value = (
+                    settings.auth_bypass_role
+                    if settings.auth_bypass_role in {r.value for r in UserRole}
+                    else UserRole.admin.value
+                )
+                user = User(
+                    id=uuid.uuid4(),
+                    email=fallback_name,
+                    password_hash=security.hash_password(
+                        settings.default_admin_password or "local-mode"
+                    ),
+                    role=UserRole(role_value),
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            return user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authorization"
         )

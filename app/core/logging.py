@@ -1,4 +1,4 @@
-﻿import contextvars
+import contextvars
 import logging
 import sys
 from pathlib import Path

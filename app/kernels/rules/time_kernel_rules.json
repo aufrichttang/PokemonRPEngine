@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "temporal_debt": 0,
+    "narrative_cohesion": 80,
+    "judicative_stability": 80,
+    "compilation_risk": 10,
+    "phase3_stripping_progress": 0
+  },
+  "classification": {
+    "fixed_min_trust": 0.75,
+    "fixed_max_conflict": 35,
+    "fragile_min_conflict": 36
+  },
+  "echo_keywords": ["梦", "幻觉", "回响", "幻视", "残响", "既视感"]
+}
+

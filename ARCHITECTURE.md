@@ -1,83 +1,75 @@
-﻿# Architecture
+# Architecture
 
 ## Overview
+Pokemon RP Engine 采用前后端分离：
+- Frontend (`web/`): Next.js 15
+- Backend (`app/`): FastAPI + SQLAlchemy
+- Desktop (`desktop/`): Electron
 
-Pokemon RP Engine uses a split frontend/backend architecture:
+## Backend Layers
+- API Layer: `app/api`（auth / sessions / chat / v2 game / admin）
+- Service Layer: `app/services`（业务编排、事务边界）
+- Memory Layer: `app/memory`（query/retrieve/compress/assemble/writeback）
+- Canon Layer: `app/canon`（事实校验与数据导入）
+- Kernel Layer: `app/kernels`（lore/time/faction）
+- World Layer: `app/worldgen`（seed 生成）
+- Data Layer: `app/db`（模型 + 迁移）
 
-- Frontend Console (`web/`): Next.js 15 + Ant Design
-- Backend API (`app/`): FastAPI + SQLAlchemy + memory pipeline + provider abstraction
+## Runtime Flow (V2)
+1. `POST /v2/game/slots/{slot_id}/turns?stream=true`
+2. `TurnPipelineService` 执行两阶段：
+   - Planner：生成正式 `action_options` + `narrative.primary`
+   - Narrative：流式生成 detail
+3. SSE 固定序列：`ack -> options -> primary -> delta* -> done`
+4. `state_reducer` 统一落库（状态快照、回合记录、内核摘要）
+5. `memory_writer` 写入 timeline/memory chunks
 
-Backend follows a layered structure:
+## No-Map Design (Breaking)
+本版本已下线地图功能：
+- 玩家 API 不再提供 `/map` 路由
+- `world_profile` 与 `v2 slot detail` 不再返回 `map_data`
+- 章节推进仅通过 `story_progress` + 内核压力驱动
 
-- API Layer (`app/api`): auth, sessions, chat, admin/debug, health, metrics
-- Service Layer (`app/services`): application workflows and transaction boundaries
-- Memory Layer (`app/memory`): query planning, retrieval, compression, prompt assembly, write-back
-- Canon Layer (`app/canon`): structured fact extraction/checking and canon ingest/validation
-- Provider Layer (`app/providers`): LLM provider abstraction and Xfyun integrations
-- Data Layer (`app/db`): SQLAlchemy models + Alembic migrations
+## Memory + Canon
+- Timeline（confirmed/implied/pending/conflict）
+- Vector memory chunks
+- Prompt 注入顺序：
+  - `CANON_FACTS`
+  - `PLAYER_PROFILE`
+  - `WORLD_PROFILE`
+  - `KERNEL_CAPSULE`
+  - `STORY_ENHANCEMENT`
+  - `STORY_BLUEPRINT`
+  - `CURRENT_CHAPTER_OBJECTIVE`
+  - `LEGENDARY_WEB`
+  - `SACRIFICE_STAKES`
+  - `ROMANCE_CANDIDATES`
+  - `STARTER_OPTIONS`
+  - `GYM_PLAN`
+  - `RELEVANT_RECALLS`
+  - `OPEN_THREADS`
+  - `SHORT_WINDOW`
 
-## Admin Console Modules
+## Option Strategy
+- 优先 planner 生成（质量优先）
+- planner 超时/失败时走 `contextual_fallback`（基于 objective/location/quest/user input）
+- 不再使用固定三模板 `opt-mainline/opt-investigate/opt-prepare`
 
-- `sessions`: 会话列表、创建、删除、导出
-- `sessions/[id]`: 聊天窗口 + SSE 流式输出 + 记忆调试 + 冲突确认
-- `ops`: 聚合指标面板（JSON summary + health/ready）
-- `canon`: Pokemon/Move 检索与属性克制表查询
-
-## Core Chat Flow
-
-1. `POST /v1/sessions/{id}/messages`
-2. `QueryBuilder` generates 3-6 retrieval queries
-3. `MemoryRetriever` fetches:
-   - confirmed timeline facts
-   - vector recalls (session-scoped)
-   - open threads
-4. `Compression` applies count and budget limits
-5. `PromptAssembler` builds stable prompt blocks:
-   - `CANON_FACTS`
-   - `RELEVANT_RECALLS`
-   - `OPEN_THREADS`
-   - `SHORT_WINDOW`
-6. Provider generates assistant text (`mock/http/ws`)
-7. `CanonFactChecker` validates `facts_used[]` against canon DB
-8. Optional repair generation on mismatch
-9. `MemoryWriter` writes timeline updates, vector chunks, conflict/open thread records
-10. Turn is committed and auditable
-
-## Data Design
-
-- `timeline_events` is append-only semantics for facts
-- `canon_level=confirmed` is treated as immutable truth source
-- conflicts are never overwrite operations; they create `conflict` events + `open_threads`
-- `audit_logs` records replayable internal decisions and prompt injection snapshots
-
-## Extensibility
-
-- Add new LLM providers by implementing `LLMProvider`
-- Replace embedding provider via `EMBEDDING_PROVIDER` env
-- Add custom world lore via separate tables, without overriding canon tables
-- Add battle engine as deterministic service using `canon_type_chart`
+## JSON Leak Guard
+双层防护：
+- 后端流式阶段在 `facts_used/state_update/...` 标记处截断 delta
+- 前端 stream 消费再做 sanitize
 
 ## Observability
+- `trace_id` + `X-Trace-Id`
+- JSON logs (`structlog`)
+- Metrics:
+  - `rp_turn_first_interactive_seconds`
+  - `rp_turn_done_seconds`
+  - `rp_provider_planner_latency_seconds`
+  - `rp_provider_narrative_latency_seconds`
+  - `rp_planner_timeout_fallback_total`
 
-- `trace_id` middleware and `X-Trace-Id` response header
-- request latency header: `X-Process-Time-Ms`
-- JSON logs via `structlog`
-- local log file output (`LOG_FILE_PATH`, default `logs/rp-engine.log`)
-- Prometheus metrics:
-  - `rp_requests_total`
-  - `rp_provider_latency_seconds`
-  - `rp_retrieval_vector_hits_total`
-  - `rp_retrieval_timeline_hits_total`
-  - `rp_turns_created_total`
-  - `rp_conflicts_total`
-- Admin summary endpoint:
-  - `GET /v1/admin/metrics/summary`
-  - `GET /v1/admin/logs/recent`
-
-## New API Additions for Console
-
-- `GET /v1/sessions/{id}/timeline/events`
-- `GET /v1/canon/pokemon`
-- `GET /v1/canon/moves`
-- `GET /v1/canon/type-chart`
-- `GET /v1/admin/metrics/summary`
+## Dev/Player Modes
+- 玩家默认隐藏调试面板
+- 开发模式：`RP_DEV_DEBUG_UI=true` 或 `?debug=1`

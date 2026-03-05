@@ -1,1 +1,1 @@
-﻿"""Pokemon RP Engine package."""
+"""Pokemon RP Engine package."""

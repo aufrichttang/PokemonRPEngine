@@ -1,0 +1,16 @@
+{
+  "protocol_phase_thresholds": [
+    {"max_cycle_instability": 19, "phase": "silent_sampling"},
+    {"max_cycle_instability": 39, "phase": "interface_fatigue"},
+    {"max_cycle_instability": 59, "phase": "narrative_stripping"},
+    {"max_cycle_instability": 79, "phase": "authority_reclamation"},
+    {"max_cycle_instability": 100, "phase": "silent_recompile"}
+  ],
+  "defaults": {
+    "global_balance_index": 50,
+    "human_power_dependency": 50,
+    "cycle_instability": 20,
+    "player_cross_signature_level": 0
+  }
+}
+

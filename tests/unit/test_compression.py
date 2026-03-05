@@ -1,4 +1,4 @@
-﻿from app.core.config import Settings
+from app.core.config import Settings
 from app.memory.compression import compress_retrieval
 from app.memory.schemas import RecallItem, RetrievalDebug, RetrievalResult
 

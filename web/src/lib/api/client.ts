@@ -2,7 +2,7 @@ import { clearToken, getToken } from "@/lib/auth/token";
 import { ApiError } from "@/lib/schemas/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
-const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS ?? "12000");
+const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS ?? "120000");
 
 type RequestOptions = {
   method?: "GET" | "POST" | "DELETE";

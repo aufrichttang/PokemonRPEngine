@@ -1,4 +1,4 @@
-﻿from app.canon.validate import validate_canon_integrity
+from app.canon.validate import validate_canon_integrity
 from app.db.session import SessionLocal
 
 if __name__ == "__main__":

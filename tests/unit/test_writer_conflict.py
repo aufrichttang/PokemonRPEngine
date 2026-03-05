@@ -1,4 +1,4 @@
-﻿from app.memory.writer import _is_conflict
+from app.memory.writer import _is_conflict
 
 
 def test_conflict_detection() -> None:

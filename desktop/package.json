@@ -8,6 +8,7 @@
     "start": "electron ."
   },
   "devDependencies": {
-    "electron": "^35.0.2"
+    "electron": "^35.0.2",
+    "electron-packager": "^17.1.2"
   }
 }

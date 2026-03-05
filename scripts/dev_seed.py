@@ -1,4 +1,4 @@
-﻿from app.db.models import CanonMove, CanonPokemon, CanonTypeChart
+from app.db.models import CanonMove, CanonPokemon, CanonTypeChart
 from app.db.session import SessionLocal
 
 
