@@ -1,8 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import random
 import uuid
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy import desc, select
@@ -13,6 +14,7 @@ from app.core.logging import get_logger
 from app.db.models import AuditLog, CanonLevel, SaveSlot, TimelineEvent, Turn
 from app.db.models import Session as StorySession
 from app.providers.base import LLMProvider
+from app.services.opening_story_service import OpeningStoryService
 from app.services.session_world_service import SessionWorldService
 from app.services.story_enhancement_service import StoryEnhancementService
 from app.services.v2.kernel_summary_service import KernelSummaryService
@@ -22,15 +24,15 @@ from app.worldgen.generator import generate_world
 logger = get_logger(__name__)
 
 PLAYER_NAMES = {
-    "male": ["林烬", "顾泽", "陆川", "沈曜", "白霆", "程夜", "周岚", "韩澈"],
-    "female": ["苏晴", "姜澜", "林汐", "顾念", "白音", "沈璃", "程雪", "安语"],
-    "nonbinary": ["星野", "流岚", "若川", "朝雾", "叶岚", "云澈", "北辰", "千屿"],
+    "male": ["林烁", "顾泽", "陆川", "沈曜", "白隼", "程夜", "周岚", "韩澈"],
+    "female": ["苏晴", "姜澜", "林澄", "顾念", "白音", "沈玲", "程雪", "安语"],
+    "nonbinary": ["星野", "流岚", "若川", "朝雾", "叶岚", "云澈", "北景", "千岚"],
 }
 APPEARANCE_POOL = [
-    "黑发、目光沉静、笑起来带一点锋芒",
-    "银灰短发、轮廓干净、气质冷冽",
-    "长发束尾、眼神明亮、运动感很强",
-    "五官立体、神情克制、带一点神秘感",
+    "黑发，目光沉静，笑起来带一点锋芒",
+    "银灰短发，轮廓干净，气质冷冽",
+    "长发束尾，眼神明亮，运动感很强",
+    "五官立体，神情克制，带一点神秘感",
 ]
 PERSONALITY_POOL = [
     "外冷内热，关键时刻会护住同伴",
@@ -47,7 +49,7 @@ BACKGROUND_POOL = [
 ROMANCE_POOL = {
     "female": [
         {"name": "白晴", "role": "遗迹研究员", "trait": "冷艳聪明，笑起来很温柔"},
-        {"name": "林音", "role": "道馆继承人", "trait": "明媚强势，战斗气场极强"},
+        {"name": "林音", "role": "道馆继承人", "trait": "明艳强势，战斗气场极强"},
         {"name": "苏晚", "role": "联盟特派员", "trait": "高冷优雅，私下反差可爱"},
         {"name": "顾瑶", "role": "神兽观测员", "trait": "外表清冷，内心炽热"},
     ],
@@ -55,7 +57,7 @@ ROMANCE_POOL = {
         {"name": "沈曜", "role": "精英训练家", "trait": "沉稳克制，关键时刻极有担当"},
         {"name": "程凛", "role": "巡防队长", "trait": "锋芒毕露，保护欲很强"},
         {"name": "陆川", "role": "机械师", "trait": "毒舌但可靠，行动力爆表"},
-        {"name": "韩澈", "role": "馆主候补", "trait": "冷面寡言，情感专一"},
+        {"name": "韩澈", "role": "领主候补", "trait": "冷面寡言，情感专一"},
     ],
 }
 
@@ -188,13 +190,11 @@ def _build_backstory(
     ]
     raw_age = profile.get("age")
     player_age = int(raw_age) if isinstance(raw_age, int) else 18
-    # Keep timeline consistent with current character age.
-    # Example: age=12 -> trigger_age=11, avoiding fixed 15-year contradiction.
     trigger_age = max(10, min(17, player_age - 1 if player_age > 10 else player_age))
 
     incident_pool = [
         f"你在{trigger_age}岁那年目睹了{main_legend}异象导致的城镇停电与暴走事件。",
-        "一次护送任务中，你在遗迹中发现了失控封印碎片，从此被卷入神兽纷争。",
+        "一次护送任务中，你在遗迹里发现失控封印碎片，从此被卷入神兽纷争。",
         "你曾试图救下重要之人，却在封印崩裂中失败，这成为你无法回避的伤口。",
     ]
     vow_pool = [
@@ -227,51 +227,61 @@ def _build_backstory(
         "secret": rnd.choice(secret_pool),
         "romance_hook": rnd.choice(romance_hook_pool),
     }
-
-
-def _opening_intro(story: StorySession) -> tuple[str, list[dict[str, str]], dict]:
-    world: dict[str, Any] = story.world_profile if isinstance(story.world_profile, dict) else {}
-    profile: dict[str, Any] = story.player_profile if isinstance(story.player_profile, dict) else {}
-    starters = [s for s in (story.starter_options or []) if isinstance(s, dict)]
-    love_raw = world.get("romance_lead")
-    love: dict[str, Any] = love_raw if isinstance(love_raw, dict) else {}
-    romance_candidates = [
-        c for c in (world.get("romance_candidates") or []) if isinstance(c, dict)
-    ]
-    legend_raw = world.get("legendary_arc")
-    legend: dict[str, Any] = legend_raw if isinstance(legend_raw, dict) else {}
-    backstory = profile.get("backstory", {}) if isinstance(profile.get("backstory"), dict) else {}
-    story_enhancement = (
-        world.get("story_enhancement", {}) if isinstance(world.get("story_enhancement"), dict) else {}
-    )
-    enhanced_backstory = (
-        backstory.get("enhanced", {}) if isinstance(backstory.get("enhanced"), dict) else {}
-    )
+def _extract_first_chapter(world: dict[str, Any]) -> dict[str, Any]:
     story_blueprint = (
         world.get("story_blueprint", {}) if isinstance(world.get("story_blueprint"), dict) else {}
     )
     acts = story_blueprint.get("acts", []) if isinstance(story_blueprint.get("acts"), list) else []
-    first_chapter: dict[str, Any] = {}
     if acts and isinstance(acts[0], dict):
         chapters = acts[0].get("chapters", [])
         if isinstance(chapters, list) and chapters and isinstance(chapters[0], dict):
-            first_chapter = chapters[0]
-    legendary_names = []
-    legendary_web = world.get("legendary_web", {})
-    if isinstance(legendary_web, dict):
-        nodes = legendary_web.get("nodes", [])
-        if isinstance(nodes, list):
-            legendary_names = [
-                str(node.get("name_zh"))
-                for node in nodes
-                if isinstance(node, dict) and node.get("name_zh")
-            ]
+            return chapters[0]
+    return {}
 
-    starter_lines = []
+
+def _opening_intro(
+    story: StorySession,
+    *,
+    opening_story: dict[str, Any] | None = None,
+) -> tuple[str, list[dict[str, str]], dict]:
+    world: dict[str, Any] = story.world_profile if isinstance(story.world_profile, dict) else {}
+    profile: dict[str, Any] = story.player_profile if isinstance(story.player_profile, dict) else {}
+    starters = [s for s in (story.starter_options or []) if isinstance(s, dict)]
+    backstory = profile.get("backstory", {}) if isinstance(profile.get("backstory"), dict) else {}
+    first_chapter = _extract_first_chapter(world)
+
+    opening_story = opening_story if isinstance(opening_story, dict) else {}
+    digest_lines = [
+        str(item).strip()
+        for item in (opening_story.get("profile_digest_lines") or [])
+        if str(item).strip()
+    ][:5]
+    if not digest_lines:
+        digest_lines = [
+            f"{profile.get('name', '未命名')}，{profile.get('gender', '未知')}，{profile.get('age', '?')}岁，{profile.get('height_cm', '?')}cm。",
+            f"外形：{profile.get('appearance', '轮廓冷峻，气质克制')}。",
+            f"性格：{profile.get('personality', '外冷内热，关键时刻会护住同伴')}。",
+            f"背景：{profile.get('background', '来自边境小镇，背负未解之谜')}。",
+        ]
+
+    scene = str(opening_story.get("backstory_scene") or "").strip()
+    if not scene:
+        scene = (
+            f"你在{world.get('start_town', '未知城镇')}醒来，夜色像铁一样压在轨道上。"
+            f"脑海里最先涌上的，是那场灾变：{backstory.get('inciting_incident', '神兽异象打碎了原有的生活')}。"
+            f"你仍记得自己立下的誓言：{backstory.get('scar_and_vow', '哪怕牺牲荣耀，也要守住撤离线')}。"
+        )
+
+    transition = str(opening_story.get("transition_line") or "").strip()
+    if not transition:
+        transition = (
+            f"当前目标：{first_chapter.get('objective', '完成启程并锁定第一枚徽章线索')}。"
+            f"代价预警：{first_chapter.get('sacrifice_cost', '胜利伴随牺牲')}。"
+        )
+
     options: list[dict[str, str]] = []
-    for idx, s in enumerate(starters[:3], 1):
-        name = str(s.get("name_zh") or "未知伙伴")
-        starter_lines.append(f"{idx}) {name}")
+    for idx, starter in enumerate(starters[:3], 1):
+        name = str(starter.get("name_zh") or f"御三家{idx}")
         options.append(
             {
                 "id": f"starter-{idx}",
@@ -280,87 +290,41 @@ def _opening_intro(story: StorySession) -> tuple[str, list[dict[str, str]], dict
             }
         )
 
-    options.extend(
-        [
-            {
-                "id": "ask-romance",
-                "text": "询问恋爱线索与主角背景",
-                "send_text": "我先了解恋爱线索与主角背景。",
-            },
-            {
-                "id": "ask-legend",
-                "text": "追问神兽传说与主线危机",
-                "send_text": "我追问神兽传说和这片大陆的危机。",
-            },
-            {
-                "id": "ask-backstory",
-                "text": "追问我过去的关键事件",
-                "send_text": "我想先回看我的过去经历和关键创伤。",
-            },
-        ]
-    )
-    for idx, candidate in enumerate(romance_candidates[:3], 1):
-        candidate_name = str(candidate.get("name") or f"候选对象{idx}")
+    romance_candidates = [
+        c for c in (world.get("romance_candidates") or []) if isinstance(c, dict)
+    ]
+    if romance_candidates:
+        candidate_name = str(romance_candidates[0].get("name") or "关键人物")
         options.append(
             {
-                "id": f"romance-route-{idx}",
-                "text": f"优先接近{candidate_name}，推进恋爱支线",
-                "send_text": f"我决定先接近{candidate_name}，看看我们会发生什么。",
+                "id": "ask-romance",
+                "text": f"询问{candidate_name}与恋爱主线",
+                "send_text": f"我想先了解{candidate_name}和这条恋爱线索。",
             }
         )
+    options.append(
+        {
+            "id": "ask-legend",
+            "text": "追问神兽危机与大陆真相",
+            "send_text": "我想知道神兽危机和大陆异象的真相。",
+        }
+    )
+    options.append(
+        {
+            "id": "ask-backstory",
+            "text": "回看我的过去并确认誓言",
+            "send_text": "我想回看过去的关键事件，并确认我的主线誓言。",
+        }
+    )
 
-    intro_text = "\n".join(
+    intro_text = "\n\n".join(
         [
-            "【旁白】",
-            f"你在 {world.get('start_town', '未知城镇')} 醒来，眼前是从未见过的新大陆：{world.get('continent_name', '未知大陆')}。",
-            "海风与机械轰鸣交织，城市上空闪烁着古代遗迹投影，冒险与命运同一刻降临。",
-            "",
-            "【主角档案】",
-            f"- 名字：{profile.get('name', '未命名')}",
-            f"- 性别：{profile.get('gender', '未设定')}  年龄：{profile.get('age', '?')}  身高：{profile.get('height_cm', '?')}cm",
-            f"- 外形：{profile.get('appearance', '未设定')}",
-            f"- 个性：{profile.get('personality', '未设定')}",
-            f"- 背景：{profile.get('background', '未设定')}",
-            f"- 细节：{profile.get('detail', '未设定')}",
-            "",
-            "【剧情预告】",
-            f"- 恋爱主线：{love.get('name', '神秘同伴')}（{love.get('role', '搭档候选')}）",
-            f"- 神兽主线：{legend.get('legendary_name', '未知神兽')} · {legend.get('prophecy', '一则古老预言')}",
-            f"- 多神兽网络：{' / '.join(legendary_names) if legendary_names else '尚未显形'}",
-            f"- 主线润色：{story_enhancement.get('arc_overview', '规则骨架模式，待润色')}",
-            *(
-                [
-                    f"- 恋爱候选：{c.get('name', '未知')}（{c.get('role', '未知身份')}）· {c.get('trait', '')}"
-                    for c in romance_candidates[:3]
-                ]
-                if romance_candidates
-                else []
-            ),
-            "",
-            "【前史档案】",
-            f"- 出身：{backstory.get('origin', '未知')}",
-            f"- 触发事件：{backstory.get('inciting_incident', '未知')}",
-            f"- 创伤与誓言：{backstory.get('scar_and_vow', '未知')}",
-            f"- 旧羁绊：{(backstory.get('past_companion') or {}).get('name', '未知')} / {(backstory.get('past_companion') or {}).get('fate', '未知')}",
-            f"- 隐藏秘密：{backstory.get('secret', '未知')}",
-            f"- 恋爱引线：{backstory.get('romance_hook', '未知')}",
-            f"- 润色前史：{enhanced_backstory.get('inciting_incident', backstory.get('inciting_incident', '未知'))}",
-            "",
-            "【主线蓝图】",
-            f"- 当前章节：第{first_chapter.get('chapter_index', 1)}章·{first_chapter.get('title', '起始火花')}",
-            f"- 强制目标：{first_chapter.get('objective', '完成启程并锁定主线危机')}",
-            f"- 冲突核心：{first_chapter.get('core_conflict', '封印异动正在蔓延')}",
-            f"- 代价提示：{first_chapter.get('sacrifice_cost', '胜利一定伴随代价')}",
-            f"- 当前起点：{world.get('start_town', '未知城镇')}",
-            "",
-            "【御三家】",
-            *(starter_lines or ["1) 妙蛙种子", "2) 小火龙", "3) 杰尼龟"]),
-            "",
-            "【可选动作】",
-            "1) 选择你的初始伙伴",
-            "2) 询问恋爱线的关键人物",
-            "3) 追问神兽危机与大陆真相",
-            "4) 回看我的过去并确认主线誓言",
+            "【旁白】\n"
+            f"你在{world.get('start_town', '未知城镇')}醒来，眼前是{world.get('continent_name', '未知大陆')}的黎明。"
+            "海风与机械轰鸣交织，远空的遗迹投影正缓慢旋转。",
+            "【主角档案摘要】\n" + "\n".join(f"- {line}" for line in digest_lines),
+            "【前史回放】\n" + scene,
+            "【当前目标】\n" + transition,
         ]
     )
 
@@ -370,15 +334,13 @@ def _opening_intro(story: StorySession) -> tuple[str, list[dict[str, str]], dict
         "story_progress": {
             "act": 1,
             "chapter": 1,
-            "objective": first_chapter.get("objective", "完成启程并锁定主线危机"),
+            "objective": first_chapter.get("objective", "完成启程并锁定第一枚徽章线索"),
             "objective_status": "pending",
             "turns_in_chapter": 0,
         },
         "quests": [
             "完成初始伙伴选择",
-            f"接触{love.get('name', '关键角色')}并建立羁绊",
-            f"调查{legend.get('legendary_name', '神兽')}相关异象",
-            f"主线第1章：{first_chapter.get('objective', '完成启程并锁定主线危机')}",
+            first_chapter.get("objective", "完成启程并锁定第一枚徽章线索"),
         ],
     }
     return intro_text, options, opening_state
@@ -394,6 +356,10 @@ class SessionService:
         self.settings = settings
         self.provider = provider
         self.story_enhancement_service = StoryEnhancementService(
+            settings=settings,
+            provider=provider,
+        )
+        self.opening_story_service = OpeningStoryService(
             settings=settings,
             provider=provider,
         )
@@ -450,6 +416,35 @@ class SessionService:
             backstory["enhanced"] = story_enhancement.get("backstory_polish", {})
             profile["backstory"] = backstory
 
+        first_chapter = _extract_first_chapter(world_profile)
+        backstory_payload = (
+            profile.get("backstory", {}) if isinstance(profile.get("backstory"), dict) else {}
+        )
+        opening_started = perf_counter()
+        opening_story_result = self.opening_story_service.generate_opening_story(
+            world_profile=world_profile,
+            player_profile=profile,
+            backstory=backstory_payload,
+            first_chapter=first_chapter,
+            story_enhancement=story_enhancement if isinstance(story_enhancement, dict) else {},
+        )
+        opening_story = {
+            "profile_digest_lines": opening_story_result.profile_digest_lines,
+            "backstory_scene": opening_story_result.backstory_scene,
+            "transition_line": opening_story_result.transition_line,
+            "source": opening_story_result.source,
+        }
+        world_profile["opening_story"] = opening_story
+        opening_story_ms = int((perf_counter() - opening_started) * 1000)
+        logger.info(
+            "opening_story_generated",
+            opening_story_source=opening_story_result.source,
+            opening_story_ms=opening_story_ms,
+            opening_story_chars=len(opening_story_result.backstory_scene),
+            session_seed=generated.seed,
+            canon_gen=canon_gen,
+        )
+
         story = StorySession(
             user_id=user_id,
             title=title,
@@ -484,7 +479,7 @@ class SessionService:
         )
         db.commit()
 
-        intro_text, intro_options, opening_state = _opening_intro(story)
+        intro_text, intro_options, opening_state = _opening_intro(story, opening_story=opening_story)
         turn = Turn(
             session_id=story.id,
             turn_index=1,

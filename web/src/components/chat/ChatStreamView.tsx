@@ -140,16 +140,25 @@ const optionClassByIndex = [
 export default function ChatStreamView({ messages, onOptionClick }: Props) {
   return (
     <div className="space-y-3">
-      {messages.map((msg) => (
-        <Card
-          key={msg.id}
-          className={cn(
-            "message-enter border",
-            msg.role === "user"
-              ? "border-[#4f7bc6] bg-[linear-gradient(145deg,rgba(15,36,74,.9),rgba(12,26,54,.96))]"
-              : "border-[#3f4f7f] bg-[linear-gradient(145deg,rgba(26,25,50,.9),rgba(18,20,39,.96))]",
-          )}
-        >
+      {messages.map((msg) => {
+        const isOpening = msg.role === "assistant" && (msg.turnIndex ?? 0) === 1;
+        return (
+          <Card
+            key={msg.id}
+            className={cn(
+              "message-enter border",
+              msg.role === "user"
+                ? "border-[#4f7bc6] bg-[linear-gradient(145deg,rgba(15,36,74,.9),rgba(12,26,54,.96))]"
+                : "border-[#3f4f7f] bg-[linear-gradient(145deg,rgba(26,25,50,.9),rgba(18,20,39,.96))]",
+              isOpening &&
+                "border-[#5cc8ff] bg-[linear-gradient(145deg,rgba(17,39,84,.95),rgba(16,29,63,.97))] shadow-[0_0_24px_rgba(92,200,255,.18)]",
+            )}
+          >
+            {isOpening ? (
+              <div className="mb-2 inline-flex items-center rounded-full border border-[#5cc8ff]/60 bg-[#122f68] px-3 py-1 text-xs font-semibold text-[#d9efff]">
+                开场剧情
+              </div>
+            ) : null}
           <div className="mb-2 flex items-center gap-2">
             <Badge variant={msg.role === "user" ? "primary" : "violet"}>{msg.role}</Badge>
             {msg.turnIndex ? <span className="text-xs text-[#8ea5cd]">Turn {msg.turnIndex}</span> : null}
@@ -176,8 +185,9 @@ export default function ChatStreamView({ messages, onOptionClick }: Props) {
               ))}
             </div>
           ) : null}
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
     </div>
   );
 }
